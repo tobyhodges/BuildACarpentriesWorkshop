@@ -4,7 +4,7 @@ pkgdown_sha: ~
 articles:
   HOWTO_BUILD_WORKSHOP: HOWTO_BUILD_WORKSHOP.html
   workshop_example: workshop_example.html
-last_built: 2021-06-28T14:41Z
+last_built: 2021-06-28T14:43Z
 urls:
   reference: https://jdrnevich.github.io/BuildACarpentriesWorkshop//reference
   article: https://jdrnevich.github.io/BuildACarpentriesWorkshop//articles
