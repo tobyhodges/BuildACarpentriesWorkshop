@@ -2,9 +2,8 @@ pandoc: 2.11.4
 pkgdown: 1.6.1
 pkgdown_sha: ~
 articles:
-  HOWTO_BUILD_WORKSHOP: HOWTO_BUILD_WORKSHOP.html
-  workshop_example: workshop_example.html
-last_built: 2021-06-28T14:47Z
+  CarpentriesWorkshopSyllabus: CarpentriesWorkshopSyllabus.html
+last_built: 2021-06-28T15:03Z
 urls:
   reference: https://jdrnevich.github.io/BuildACarpentriesWorkshop//reference
   article: https://jdrnevich.github.io/BuildACarpentriesWorkshop//articles
