@@ -1,0 +1,641 @@
+---
+title: "HPCBio Single Cell Workshop"
+author: "Jenny Drnevich, Jessica Holmes and Lindsay Clark"
+date: "10/30/2020"
+output: 
+  ioslides_presentation:
+    widescreen: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
+```
+
+
+## Welcome - 10X Single Cell Workshop
+
+Jenny Drnevich, Instructor
+
+Helpers: Jessica Holmes and Lindsay Clark
+
+Workshop wiki: https://go.illinois.edu/10X-rnaseq
+
+Please download:
+
+* This slide deck - 2020-10-30
+* Directory structure
+
+Make sure you have your hpcbioXX username and password from email
+
+## Introductions and Poll
+
+Instructor & helpers
+
+Participants
+
+Poll 1: What computer OS are you using?
+
+1. Linux
+2. Mac
+3. Windows
+
+
+
+## Overview - Part 1 on Biocluster
+
+1. Brief review of bash, biocluster, reproducible research and file formats
+
+2. Examine sequencing report and download data to biocluster
+
+2. Go over Cell Ranger pipelines needed:
+    * `cellranger mkgtf` and `cellranger mkref`
+    * `cellranger count`
+    * `cellranger aggr`
+
+3. Examine Cell Ranger outputs
+
+4. Explore using Loupe Browser
+
+
+## What this workshop will and will not cover
+
+1. Will give hands-on demo of single cell gene expression libraries using `cellranger` and Seurat.
+
+2. Will NOT do demo of ATAC or Visium libraries.
+
+3. Will point out similarities of inputs to `cellranger-atac` and `spaceranger`, and learned pitfalls of `spaceranger`.
+
+## Too Fast! Too Slow!
+
+It is impossible to have one best teaching speed for a mixed group of learners.
+
+I will slow down my speaking speed (please remind me!)
+
+To better serve a mixed group, for each task I have tried to add:
+
+- Extra material for those done early
+- Expected material for the bulk of the class
+- Work-arounds for those who would need more time to finish
+
+## Project setup
+
+1. Log in to the Biocluster via MobaXterm or terminal (Mac)
+```{r login}
+> ssh hpcbioXX@biologin.igb.illinois.edu
+#enter password for your XX number - the cursor will NOT move!
+```
+
+2. Use a worker node by doing an interactive srun for the classroom queue  
+```{r srun}
+$ srun -p classroom --pty bash  
+```
+
+3. Copy over a directory structure:  
+```{r cp}
+$ cp -r /home/classroom/hpcbio/fa20-scRNA/scRNA-2020/ ~/  
+```
+
+Remember to use tab-complete to get to the right place!
+
+
+## Where are you are on Biocluster?  
+
+<div class="red">Login node vs. worker node?</div>  
+
+1. Look at beginning of command prompt to figure out:
+    a. `[username@biologin` = login node
+    b. `[username@compute-X-X` = worker node
+2. Login: scheduler commands, submit scripts, **INTERNET**
+3. Worker: interactive working, run small jobs  
+
+<div class="red">Place in directory structure?</div>  
+
+1. Look at end of command prompt to figure out:
+    a. `currentDirName]$`
+    b. `~]$` means your home directory
+2. `pwd` will give full path to your current directory
+3. Keep in mind relative vs. full path when writing scripts!
+
+## Directory structure
+
+```{r dirstr}
+$ cd ~/scRNA-2020
+$ pwd
+/home/a-m/hpcinstru05/scRNA-2020
+$ tree
+.
+├── data
+│   ├── genome
+│   └── raw-seq
+├── results
+│   └── cellranger_1M
+└── src
+    ├── JobScriptStart.sh
+    ├── pack_CR_results.sh
+    ├── slurm-out
+    └── uncompress-tbz.sh
+
+```
+
+NOTE: `tree` does not work on login node
+
+## Bash command usage
+
+`commandName [options] [argument1] [argument2]...`
+
+- First word of new line interpreted as a command/program to run; everything is separated by spaces.
+- Options start with `-` or `--` and can be in any order. To set a value for an option, do it one space after: `-p 4`
+- Arguments often are input files to command. They must in in order and after all options
+- The entire command-options-arguments must be on the same line; to split to multiply lines for clarity, end each line with `\`.
+
+```{r example}
+$ srun -p classroom --pty bash  
+$ cp -r /home/classroom/hpcbio/fa20-scRNA/scRNA-2020/ ~/  
+```
+
+Poll Question 2
+
+## Reproducible vs. Replicable
+
+<div class="red">**Reproducibility**</div> is the ability to re-compute the analytic results of a study given the original data set and a description of the steps taken in the original analysis. [Peng 2011, Science](http://www.sciencemag.org/content/334/6060/1226.abstract)
+
+<div class="red">**Replicability**</div> is the likelihood that a new study on the same scientific question will produce a result consistent with the original study. [Asendorph 2013 European J. of Personality](http://onlinelibrary.wiley.com/doi/10.1002/per.1919/abstract)
+
+## Reproducible Data Analysis
+
+* You should have a (virtual) computational notebook like you have a lab notebook
+* Every detail of the data analysis needs to be recorded so that you or anyone else could reproduce the end results
+  + Software, versions, options specified
+  + All data manipulations/normalizations/transformations
+  + Exact statistical methods used
+  + How each figure/table was calculated and made
+
+## Tips for reproducibility
+
+* Avoid using programs that do not record all data manipulations that were done (e.g., Excel, point-and-click pop-up boxes; Loupe Browser?!)
+* Use written scripts instead of typing in commands directly at the prompt (Linux, R, Python, etc.)
+* Use helper programs that allow you to integrate verbal explanations with actual codes and computed output (Rmarkdown, iPython notebook, etc.)
+* Collate bare-minimum explanations, scripts and codes for each publication for inclusion in supplementary materials or at least "available upon request"
+
+## Reproducibility for Biocluster
+
+- Log in to biocluster a second (or third) time
+- Change to `src` directory and create a file to take notes:
+
+```{r nano}
+$ srun -p classroom --pty bash
+$ cd ~/scRNA-2020/src  
+$ nano Notes-scRNA_biocluster.txt
+```
+
+Don't forget to save often with `ctrl-O`
+
+## File formats review {.smaller}
+
+1. Fasta (.fasta or .fna or .fa)
+    a. Contains sequences
+    b. Usually genome or transcriptome
+2. Fastq (.fastq)
+    a. Contains sequences + quality scores
+    b. Usually output from sequencer
+3. Gene models (.gff or .gtf)
+    a. Contains locations of features on genome
+    b. Tab-delimited text file with 9 columns
+        1. 3rd column is feature (region, gene, mRNA, exon, etc.)
+        2. 9th column has attributes; important ones:
+            a. gene_id
+            b. transcript_id
+            c. gene_biotype or gbkey
+
+## Practice Data Set
+
+- Generated Aug 2019, v3 chemistry, `cellranger mkfastq` 3.1
+- 2 mouse brain samples: Control and Treated (fake!)
+- Full samples have ~750M reads each
+- Practice sets of 1M reads each
+- Download sequencing report from [box](https://go.illinois.edu/10X-rnaseq) Week 1 Materials:
+  + Note names of tar file/s
+  + Info on versions for Chromium kit, sequencer and Cell Ranger 
+  + username and password for download (if ftpserver)
+
+## Sample dual vs. single indexing
+
+[10X Technical Note](https://assets.ctfassets.net/an68im79xiti/Licpd2PiHP4hrHKDpjO89/2779c006e6317ed9ca724635b32e14e9/CG000325_TechNote_ChromiumNextGEMSingle_Cell_3___v3.1_Dual_Index_Rev_A.pdf)
+
+- Older 10X libraries used only a single sample index (i5), used to demultiplex reads to each sample.
+- "Index hopping" can occur in 0.1-2% of reads, resulting in assignment to the wrong sample.
+- New dual indexing uses unique combinations of i5 and i7; reads with unexpected i5-i7 combinations are thrown out.
+
+## Sets of .fastq files per sample:
+
+.fastq.gz will come in sets of 3 or sets of 4 per sample:
+
+Set of 3:
+
+1. R1 - 10X bead barcode + UMI
+2. R2 - actual read sequence
+3. I1 - sample i5 index
+
+Set of 4: same as above + I2 - sample i7 index
+
+After sample demultiplexing, the I1/I2 fastqs are not needed by the user!
+
+More than one set per sample: aliquots were run in different sequencing lanes (L001, L002, etc.).
+
+## Poll 3. How do you usually download files?
+
+Please mark all the ways you have used to download files to your computer:
+
+1. Through a browser by clicking on a link
+2. Through software like CyberDuck, WinSCP, Filezilla, etc.
+3. Via the command line using scp, curl or wget
+4. Other method - put in chat
+  
+## Switch from ftpserver to posting server
+
+- DNA Services is switching from a ftpserver to a new Amazon S3 posting server
+- The ftpserver has a [Globus endpoint](https://help.igb.illinois.edu/Globus) you can use to download to your own computer or directly to Biocluster.
+- The new posting server will not have a Globus endpoint.
+- We are working with DNA Services to improve the posting server download instructions; expect complete switch by January 2021.
+
+## If your data is on the ftpserver:
+
+1. Your sequencing report will have a username & password and download instructions.
+2. Any of the download methods will work to get a copy on your personal/lab computer. *NOTE: this make take hours!*
+3. The Globus method is recommended to transfer a copy directly from the ftpserver to biocluster. See CNRG's [Globus guide](https://help.igb.illinois.edu/Globus).
+4. Data on the ftpserver will be available for (at least) 30 days.
+
+<div class="red">NOTE: You need to make two backup copies of your sequencing data. A copy on Biocluster does *NOT* count. Use CNRG's [Archiving service](https://help.igb.illinois.edu/Active_Archive) instead.
+
+## If your data is on the posting server:
+
+1. You will receive download instructions in a separate email from the sequencing report.
+2. The clickable link will start a browser download to your computer. *NOTE: this make take hours!*
+3. You can also use curl or wget on your own machine (*video instructions will be made in the next couple of months*) or on **biocluster** to download a copy. 
+4. The links for the posting server expire after **7 days** but can be re-issued upon request.
+
+<div class="red">NOTE: You need to make two backup copies of your sequencing data. A copy on Biocluster does *NOT* count. Use CNRG's [Archiving service](https://help.igb.illinois.edu/Active_Archive) instead.
+
+
+## Downloading data from posting server
+
+I sent you an example email:
+
+```{r posting, tidy=TRUE, tidy.opts=list(width.cutoff=30)}
+The links (URLs) will expire on 2020-11-05
+File: Project_PIname_10X.tar.bz2 
+URL: https://posting.biotech.illinois.edu/posting/hpcbio/Project_PIname_10X.tar.bz2?x-email=cjfields%40illinois.edu&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=posting%2F20201029%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20201029T131333Z&X-Amz-Expires=604800&X-Amz-SignedHeaders=host&X-Amz-Signature=6794aa1cc12134744b4ca06e54c1b1e0c590800ccab59bbdaebb1a95d19cb39a 
+md5sum: 310c8cc625f2bf14484277cec499c0be 
+________________________________________
+To download the file via the command line
+curl -L -o FILENAME "https://....."
+or
+wget -O FILENAME "https://....."
+
+```
+
+If you click on the link in the email, it will start download to *your computer* using your default browser. This may take **hours** and your browser needs to stay open and your computer connected to the internet.
+
+
+## Download practice data using curl
+
+Exit the worker node to get back to the login node, and make sure you are in the directory you want:
+
+```{r download1}
+$ exit  
+#check prompt to make sure now on login node
+$ cd ~/scRNA-2020/data/raw-seq
+```
+
+Start typing the curl command, putting in the correct FILENAME:
+
+```{r download2}
+$ curl -L -o Project_PIname_10X.tar.bz2 #but don't hit enter yet...
+```
+
+In the email, right-click on the clickable URL and say "Copy hyperlink". Then finish the curl command by typing in `"`, pasting the link, then finishing with `"`, then hit enter. 
+
+The link must be within quotes!
+
+
+## Backup for workshop
+
+If you are having trouble downloading from the posting server, copy from:
+
+```{r backup}
+$ cd ~/scRNA-2020/data/raw-seq
+$ ls -lh  #if do not see .bz2 file, do:
+$ cp /home/classroom/hpcbio/fa20-scRNA/1M_example/data/raw-seq/Project_PIname_10X.tar.bz2 ./
+$ ls -lh
+```
+
+## Check md5sum
+
+There is potential for errors or corruption when downloading/transferring large files. MD5 hashing gives a unique digital fingerprint of a file and any difference in the file will change the hash code. The posting server e-mail gives the md5sum for the file, so we can check to make sure it did not get corrupted.
+
+
+```{r md5sum}
+#Get back on worker node
+$ srun --pty -p classroom bash
+
+$ md5sum Project_PIname_10X.tar.bz2
+```
+
+Compare the md5sum generated with the one in the email.
+
+## Extract data from .tar.bz2
+
+The individual .fastq.gz files have been put in a tar archive and the compressed using bzip2. To extract them, first use the method given in the sequencing report:
+
+
+```{r extract2}
+$ tar -xvf filename.bz2
+$ ls -lh
+$ tree
+```
+
+<div class="red">Note: full size files may take hours to extract with this method. You *must* remain logged in if doing interactively</div>
+
+<br>
+
+Alternative 1: use [screen](https://linuxize.com/post/how-to-use-linux-screen/) functionality to keep your session going even if you log out.
+
+Alternative 2: Submit as job script, either with `tar -xvf` code or by...
+
+## Parallel extraction using script 
+
+See example script:
+
+```{r extract3}
+$ cat ../../src/uncompress-tbz.sh
+#If you want to try to run this, rename the other extraction:
+$ mv Project_PIname_10X Project_PIname_10X_old
+```
+
+This script is not meant to be changed internally but have the .tar.bz passed as a varible in the sbatch call. The script has a comment showing how to run it:
+
+```{r extract4}
+$ sbatch --export=TBZ=Martinis.201875.bz2 uncompress-tbz.sh
+```
+
+Breakout rooms: figure out how to run this batch script on Project_PIname_10X.tar.bz. Warning: must point to .bz2 file and .sh script correctly!
+
+**Advanced**: Can you figure out how to use screen to open a screen session, detach it, then re-attach it? See basic steps at end of webpage.
+
+```{r extract5}
+$ ls -lh
+$ cat uncompress.out
+```
+
+## Remove .tar.bz (and _old directory if made)
+
+You pay for storage on biocluster, so you do not need the .tar.bz after extracting files. Remove it:
+
+
+```{r tree}
+$ rm Project_PIname_10X.tar.bz2 # rm -rf Project_PIname_10X_old/
+# Final directory structure:
+$ tree
+.
+├── Project_PIname_10X
+│   ├── Control
+│   │   ├── Control_1M_L001_I1_001.fastq.gz
+│   │   ├── Control_1M_L001_R1_001.fastq.gz
+│   │   └── Control_1M_L001_R2_001.fastq.gz
+│   └── Treated
+│       ├── Treated_1M_L001_I1_001.fastq.gz
+│       ├── Treated_1M_L001_R1_001.fastq.gz
+│       └── Treated_1M_L001_R2_001.fastq.gz
+├── uncompress-6259647.out
+
+3 directories, 7 files
+
+```
+
+
+## [Cell Ranger](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/what-is-cell-ranger) pipelines for sc gene expression
+
+* [`cellranger mkfastq`](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/mkfastq)  
+  + Demultiplexes samples
+  + Run by our Sequencing Center, not user
+* [`cellranger count`](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/count)
+  + Run by user
+  + Separately for each sample
+* [`cellranger aggr`](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/aggregate)
+  + Puts > 1 sample in same .cloupe file
+  + Only normalization is sub-sampling
+* [`cellranger reanalyze`](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/reanalyze)
+  + Used to modify parameters of previous run
+
+
+## Custom reference?
+
+https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/tutorial_mr
+
+- Pre-built 10X not updated frequently (last done July 2020, Ensembl release 98; current release is 101)
+- Only available for human (GRCh38 & hg19) and/or mouse (GRCm38)
+- If you want to use a different gene model set, add genes/species, or non-human/mouse organism, you will have to make a custom reference.
+
+## GTF must be compatible with STAR
+
+- Must be .gtf, not .gff
+- Feature type (column 3) of "exon"
+- Attributes (column 9) of "gene_id" and "transcript_id"
+- Ensembl/Gencode gtf files generally compatible.
+- NCBI gtf files should be compatible, but gff files are NOT without additional manipulation.
+- See [Intro to Bioconductor workshop](https://go.illinois.edu/introR), Session 2 for R codes to transform .gff file to .gtf with correct attributes.
+
+## Download newest Ensembl gtf only {.smaller}
+
+[Ensembl's mouse genome page](https://uswest.ensembl.org/Mus_musculus/Info/Index). Can you follow 10X's instructions?
+
+"Navigate to the Gene annotation section of the Ensembl website and click on the Download GTF link. This takes you to an ftp site with a list of GTF files available. Select the file called Danio_rerio.GRCz11.99.chr.gtf.gz. This is the GTF annotation file for this species. **All species in Ensembl have similar files available to download.** For more information on the GTF files in Ensembl, click on the README file."
+
+Breakout rooms: 
+
+1. Download the mouse .gtf file to `~/scRNA-2020/data/genome` using `wget`. Hint: where on biocluster do you *have* to be to run `wget` (internet access)? 
+2. Extract the .gtf file. Hint: where on biocluster *should* you be to run `gunzip`?
+3. **Need help?** See codes next slide
+3. **Advanced?** Download the gtf.gz file again. Ensembl's ftp site also has CHECKSUMS. Make sure your file downloaded fine, but use `sum` instead of `md5sum`.
+
+## Answer codes {.smaller}
+
+```{r gtf-download}
+# exit to login node
+$ exit
+# Navigate to directory 
+$ cd ~/scRNA-2020/data/genome
+# Download using wget
+$ wget ftp://ftp.ensembl.org/pub/release-101/gtf/mus_musculus/Mus_musculus.GRCm38.101.chr.gtf.gz
+# Get back on worker node
+$ srun -p classroom --pty bash
+# Bonus: checksum should be 11872 32653
+$ sum Mus_musculus.GRCm38.101.chr.gtf.gz
+# Extract the file
+$ gunzip Mus_musculus.GRCm38.101.chr.gtf.gz
+```
+
+
+## Filter out transcripts/genes?
+
+- 10X recommends filtering gtf to keep only certain kinds of genes
+- Explanation as to why somewhat lacking...
+- But likely does not make that much difference
+- 10X's `cellranger mkgtf`  [documentation](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/tutorial_mr#filter)
+- 10X's current [build steps](https://support.10xgenomics.com/single-cell-gene-expression/software/release-notes/build#mm10_2020A) for mouse reference uses some very sophisticated bash scripting!
+
+
+## Run `cellranger mkgtf`
+
+The [tutorial](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/tutorial_mr#filter) shows us an example of code to run, but not how to successfully run it on Biocluster. Try copying, modifying and pasting the `cellranger mkgtf` code to run it and see what happens...
+
+```{r fail}
+bash: cellranger: command not found
+```
+
+On Biocluster, additional software needs to have its module loded first:
+
+```{r module}
+$ module avail cellranger
+$ module load cellranger/4.0.0
+```
+
+Then could run code interactively, which could take ~10 min, or could run in job script...
+
+
+## Job Script review {.smaller}
+
+```{r script}
+$ cd ~/scRNA-2020/src
+$ cat JobScriptStart.sh
+#!/bin/bash                               #shebang line; use bash interpreter
+#SBATCH -N 1                              #number of computer nodes to reserve
+#SBATCH -n 8                             #number of processors/threads/cpus to reserve
+#SBATCH --mem=50G                         #how much memory to reserve
+#SBATCH -p classroom                      #which partition to run on
+#SBATCH --mail-user=MyEmail@illinois.edu  #where to send emails
+#SBATCH --mail-type=END,FAIL              #when to send emails
+#SBATCH -J MyJobName                      #make a descriptive job name
+#SBATCH --output=OutFileName-%A.out       #put any stout in this file name; %A adds on job id
+#SBATCH -D /home/a-m/hpcbioXX/scRNA-2020/src/slurm-out #see description in .sh
+
+### Load Modules
+module load cellranger/4.0.0
+
+### Take input memory and put 90% in new variable that can be used in
+### cellranger calls as --localmem=$memG90
+
+memG90=`awk "BEGIN { printf \"%.0f\n\", $SLURM_MEM_PER_NODE /1000*0.9}"`
+
+### Change to desired directory
+
+cd ~/scRNA-2020
+
+### Run commands
+
+```
+
+## Copy and modify job script start {.smaller}
+
+```{r script2}
+$ cp JobScriptStart.sh CR_mkgtf.sh
+$ nano CR_mkgtf.sh
+```
+
+In #SBATCH header:
+
+1. change `-n` to 1
+1. Change email address
+2. Change job name to `mkgtf`
+3. Change OutFileName to `mkgtf-%A.out`
+4. Change hpcbioXX in `-D` to your number; **must use full path** to your directory or else job disappear with no errors.
+
+In body of script:
+
+5. Change desired directory to `cd ~/scRNA-2020/data/genome`
+6. Add in corrected `cellranger mkgtf` command
+7. Save, exit then submit:
+
+```{r submit1}
+$ sbatch CR_mkgtf.sh
+```
+
+
+## Did my job run ok?
+
+Once you submit your job, check on it by:
+
+1. `squeue -u hpcbioXX`
+2. Look at the .out file in `slurm-out/` directory
+3. Check for an email from SLURM
+4. See if the expected output files are present
+
+
+## Do we have time to run `cellranger mkref`?
+
+- It takes over 30 min, so good if we can get it started by the end of today.
+- If not, it only needs to be done once per genome/gtf 
+  - You can choose to try it as homework - see next slides
+  - You can also just use one I have already made - details next week
+
+If ending now, make sure to save your notes and exit out of all connections!
+
+If continuing, need to download genome (*".dna.primary_assembly.fa.gz"*) from [Ensembl](https://uswest.ensembl.org/Mus_musculus/Info/Index) to `data/genome` like we did for the .gtf. Can you follow [10X's instructions](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/tutorial_mr#getfiles)?
+
+
+## Warning about cores and memory
+
+`cellranger` runs on Biocluster in [Job Submission Mode](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/advanced/job-submission-mode). Per (old) 10X:
+
+"By default, cellranger uses all available cores and 90% of detected memory. This behavior may be undesirable in a shared environment with multiple concurrent users and tasks. It is strongly recommended to run cellranger with `--localcores` and `--localmem` to specify resource usage upper bounds. In practice, there is negligible return in allocating more than 32 cores or 256G to the pipeline. Check the [system requirements](https://support.10xgenomics.com/single-cell-gene-expression/software/overview/system-requirements) page for more information on how resource allocations affect pipeline runtime."
+
+*Always* set `--localcores` and `--localmem` if using `cellranger count`, `cellranger aggr` or `cellranger reanalyze`
+
+(`cellranger mkref` uses `--nthreads` and `--memgb` instead)
+
+
+Check Biocluster's [queue specifications](https://help.igb.illinois.edu/Biocluster2#Cluster_Specifications)
+
+
+## Make `cellranger mkref` script
+
+```{r script3}
+# cd ~/scRNA-2020/src
+$ cp CR_mkgtf.sh CR_mkref.sh
+$ nano CR_mkref.sh
+```
+
+
+1. Change `-n` to 8
+
+2. Change job name to `mkref`
+
+3. Change OutFileName to mkref-%A.out
+
+4. Remove `cellranger mkgtf` command and put in correct `cellranger mkref` command:
+    a. Copy/paste/modify the [tutorial example](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/using/tutorial_mr#mkrefsetup).
+    b. Name the genome `GRCm38_ensembl101`
+    c. Add extra arguments: `--nthreads=$SLURM_NTASKS` and `--memgb=$memG90`
+    
+## Save and submit the script
+
+```{r submit2}
+$ sbatch CR_mkref.sh
+```
+
+Once you submit your job, check on it by:
+
+1. `squeue -u hpcbioXX`
+2. Look at the .out file in `slurm-out/` directory
+3. Check for an email from SLURM
+4. See if the expected output files are present
+
+
+## Similarites to `spaceranger` and `cellranger-atac` custom references
+
+Spaceranger's [`mkgtf/mkref`](https://support.10xgenomics.com/spatial-gene-expression/software/pipelines/latest/advanced/references) pretty much identical to `cellranger mkgtf/mkref`. (In fact, 10X told me a few months ago that a reference made with cellranger could be used for spaceranger).
+
+`cellranger-atac` does not say to filter with `mkgtf`. There is a [`mkref'](https://support.10xgenomics.com/single-cell-atac/software/pipelines/latest/advanced/references) but they **STRONGLY** suggest using their pre-built references as they have info on regulatory regions.  
+
+`cellranger-atac mkref` is run in a different format, with a [configuration file](https://support.10xgenomics.com/single-cell-atac/software/pipelines/latest/advanced/references#config)
+
