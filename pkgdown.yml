@@ -3,8 +3,7 @@ pkgdown: 1.6.1
 pkgdown_sha: ~
 articles:
   CarpentriesWorkshopSyllabus: CarpentriesWorkshopSyllabus.html
-  CellRanger_2020-10-30: CellRanger_2020-10-30.html
-last_built: 2021-07-12T12:20Z
+last_built: 2021-07-12T15:09Z
 urls:
   reference: https://jdrnevich.github.io/BuildACarpentriesWorkshop//reference
   article: https://jdrnevich.github.io/BuildACarpentriesWorkshop//articles
