@@ -154,6 +154,8 @@ The following examples are taken from that chapter.
 <p><code>for v in values</code></p>
 </blockquote>
 
+- particularly well-suited for testing understanding of control flow
+
 ---
 # Exercise formats
 
